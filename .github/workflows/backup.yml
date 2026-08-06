@@ -1,0 +1,27 @@
+name: Automated Database Backup
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Backup Folder
+        run: mkdir -p backups
+
+      - name: Create Backup File
+        run: |
+          echo "Database backup created on $(date)" > backups/backup.txt
+
+      - name: Upload Backup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-backup
+          path: backups/
