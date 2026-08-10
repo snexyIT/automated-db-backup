@@ -13,15 +13,44 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Start MySQL Database
+        run: docker compose up -d mysql
+
+      - name: Wait for MySQL
+        run: |
+          echo "Waiting for MySQL..."
+          for i in {1..30}; do
+            if docker exec mysql-db mysqladmin ping -uroot -proot123 --silent; then
+              echo "MySQL is ready."
+              break
+            fi
+            sleep 2
+          done
+
       - name: Create Backup Folder
         run: mkdir -p backups
 
-      - name: Create Backup File
+      - name: Create Database Backup
         run: |
-          echo "Database backup created on $(date)" > backups/backup.txt
+          docker exec mysql-db mysqldump -uroot -proot123 backupdb > backups/backup.sql
+          echo "Database backup created successfully."
+
+      - name: Verify Backup
+        run: |
+          if [ -s backups/backup.sql ]; then
+            echo "Backup verification successful."
+            ls -lh backups/backup.sql
+          else
+            echo "Backup verification failed."
+            exit 1
+          fi
 
       - name: Upload Backup Artifact
         uses: actions/upload-artifact@v4
         with:
           name: database-backup
-          path: backups/
+          path: backups/backup.sql
+
+      - name: Stop MySQL
+        if: always()
+        run: docker compose down
