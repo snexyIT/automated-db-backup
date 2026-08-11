@@ -16,16 +16,17 @@ jobs:
       - name: Start MySQL Database
         run: docker compose up -d mysql
 
-      - name: Wait for MySQL
-        run: |
-          echo "Waiting for MySQL..."
-          for i in {1..30}; do
-            if docker exec mysql-db mysqladmin ping -uroot -proot123 --silent; then
-              echo "MySQL is ready."
-              break
-            fi
-            sleep 2
-          done
+        - name: Wait for MySQL
+      run: |
+        echo "Waiting for MySQL..."
+        for i in {1..30}; do
+          if docker exec mysql-db mysqladmin ping -uroot -proot123 --silent; then
+            echo "MySQL is ready."
+            break
+          fi
+          sleep 2
+        done
+
 
       - name: Create Backup Folder
         run: mkdir -p backups
