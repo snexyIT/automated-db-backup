@@ -16,17 +16,23 @@ jobs:
       - name: Start MySQL Database
         run: docker compose up -d mysql
 
-        - name: Wait for MySQL
-      run: |
-        echo "Waiting for MySQL..."
-        for i in {1..30}; do
-          if docker exec mysql-db mysqladmin ping -uroot -proot123 --silent; then
-            echo "MySQL is ready."
-            break
-          fi
-          sleep 2
-        done
+      - name: Wait for MySQL
+        run: |
+          echo "Waiting for MySQL..."
 
+          for i in {1..30}; do
+            if docker exec mysql-db mysqladmin ping -uroot -proot123 --silent; then
+              echo "MySQL is ready."
+              exit 0
+            fi
+
+            echo "MySQL is not ready yet. Attempt $i/30..."
+            sleep 2
+          done
+
+          echo "MySQL failed to become ready."
+          docker logs mysql-db
+          exit 1
 
       - name: Create Backup Folder
         run: mkdir -p backups
@@ -51,16 +57,22 @@ jobs:
         with:
           name: database-backup
           path: backups/backup.sql
+
       - name: Test Database Restore
         run: |
           echo "Clearing test data..."
+
           docker exec mysql-db mysql -uroot -proot123 -e "USE backupdb; TRUNCATE TABLE students;"
 
           echo "Restoring database from backup..."
+
           docker exec -i mysql-db mysql -uroot -proot123 backupdb < backups/backup.sql
 
           echo "Verifying restored data..."
+
           COUNT=$(docker exec mysql-db mysql -uroot -proot123 -N -e "USE backupdb; SELECT COUNT(*) FROM students;")
+
+          echo "Restored record count: $COUNT"
 
           if [ "$COUNT" -eq 3 ]; then
             echo "Restore verification successful: 3 records recovered."
@@ -68,6 +80,7 @@ jobs:
             echo "Restore verification failed: expected 3 records, found $COUNT."
             exit 1
           fi
+
       - name: Stop MySQL
         if: always()
         run: docker compose down
