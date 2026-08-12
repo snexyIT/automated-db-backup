@@ -39,7 +39,7 @@ jobs:
 
       - name: Create Database Backup
         run: |
-          docker exec mysql-db mysqldump -devops -pdevops123 backupdb > backups/backup.sql
+          docker exec mysql-db mysqldump -udevops -pdevops123 backupdb > backups/backup.sql
           echo "Database backup created successfully."
 
       - name: Verify Backup
