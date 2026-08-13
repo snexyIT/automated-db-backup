@@ -36,6 +36,11 @@ jobs:
           docker logs mysql-db
           exit 1
 
+      - name: Configure Database User
+        run: |
+          docker exec mysql-db mysql -uroot -proot123 -e "ALTER USER 'devops'@'%' IDENTIFIED BY 'devops123'; GRANT ALL PRIVILEGES ON backupdb.* TO 'devops'@'%'; FLUSH PRIVILEGES;"
+          echo "Database user configured successfully."
+
       - name: Restore Existing Database
         run: |
           echo "Loading existing database backup..."
@@ -62,7 +67,7 @@ jobs:
 
       - name: Create Database Backup
         run: |
-          docker exec mysql-db mysqldump -uroot -proot123 backupdb > backups/generated/backup.sql
+          docker exec mysql-db mysqldump -udevops -pdevops123 backupdb > backups/generated/backup.sql
           echo "Database backup created successfully."
 
       - name: Verify Backup
