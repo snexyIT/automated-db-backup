@@ -18,28 +18,25 @@ jobs:
           docker compose down -v --remove-orphans
           docker compose up -d mysql
 
-      - name: Wait for MySQL
+      - name: Wait for MySQL Authentication
         run: |
-          echo "Waiting for MySQL..."
+          echo "Waiting for MySQL to finish initialization..."
 
-          for i in {1..30}; do
-            if docker exec mysql-db mysqladmin ping -uroot -proot123 --silent; then
-              echo "MySQL is ready."
-              exit 0
+          for i in {1..60}; do
+            if docker exec mysql-db mysql -uroot -proot123 -e "SELECT 1;" >/dev/null 2>&1; then
+              echo "MySQL authentication is ready."
+              break
             fi
 
-            echo "MySQL is not ready yet. Attempt $i/30..."
+            echo "MySQL is still initializing... attempt $i/60"
             sleep 2
           done
 
-          echo "MySQL failed to become ready."
-          docker logs mysql-db
-          exit 1
-
-      - name: Configure Database User
-        run: |
-          docker exec mysql-db mysql -uroot -proot123 -e "ALTER USER 'devops'@'%' IDENTIFIED BY 'devops123'; GRANT ALL PRIVILEGES ON backupdb.* TO 'devops'@'%'; FLUSH PRIVILEGES;"
-          echo "Database user configured successfully."
+          if ! docker exec mysql-db mysql -uroot -proot123 -e "SELECT 1;" >/dev/null 2>&1; then
+            echo "MySQL authentication failed after waiting."
+            docker logs mysql-db
+            exit 1
+          fi
 
       - name: Restore Existing Database
         run: |
@@ -67,7 +64,7 @@ jobs:
 
       - name: Create Database Backup
         run: |
-          docker exec mysql-db mysqldump -udevops -pdevops123 backupdb > backups/generated/backup.sql
+          docker exec mysql-db mysqldump -uroot -proot123 backupdb > backups/generated/backup.sql
           echo "Database backup created successfully."
 
       - name: Verify Backup
@@ -92,8 +89,6 @@ jobs:
 
           docker exec mysql-db mysql -uroot -proot123 -e "USE backupdb; TRUNCATE TABLE students;"
 
-          echo "Verifying table is empty..."
-
           COUNT=$(docker exec mysql-db mysql -uroot -proot123 -N -e "USE backupdb; SELECT COUNT(*) FROM students;")
 
           if [ "$COUNT" -eq 0 ]; then
@@ -106,8 +101,6 @@ jobs:
           echo "Restoring database from generated backup..."
 
           docker exec -i mysql-db mysql -uroot -proot123 backupdb < backups/generated/backup.sql
-
-          echo "Verifying restored data..."
 
           COUNT=$(docker exec mysql-db mysql -uroot -proot123 -N -e "USE backupdb; SELECT COUNT(*) FROM students;")
 
