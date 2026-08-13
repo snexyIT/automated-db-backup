@@ -1,8 +1,8 @@
 name: Automated Database Backup
-on:  workflow_dispatch:
+on:  workflow_dispatch:  schedule:    - cron: "0 0 * * *"
 jobs:  backup:    runs-on: ubuntu-latest
     steps:      - name: Checkout Repository        uses: actions/checkout@v4
-      - name: Start MySQL        run: docker compose up -d mysql
+      - name: Start MySQL        run: docker compose up -d
       - name: Wait for MySQL        run: |          for i in {1..60}; do            if docker exec mysql-db mysql -uroot -proot123 -e "SELECT 1" >/dev/null 2>&1; then              echo "MySQL is ready."              exit 0            fi            echo "Waiting for MySQL... attempt $i/60"            sleep 2          done          echo "MySQL failed to become ready."          docker logs mysql-db          exit 1
       - name: Prepare Database        run: |          docker exec mysql-db mysql -uroot -proot123 backupdb -e "CREATE TABLE IF NOT EXISTS students (id INT PRIMARY KEY, name VARCHAR(100), department VARCHAR(100)); TRUNCATE TABLE students; INSERT INTO students VALUES (1,'Olaniyan Mariah','Computer Science'),(2,'Esther Olakunle','Information Technology'),(3,'Fresky Thompson','Software Engineering');"
       - name: Verify Initial Data        run: |          COUNT=$(docker exec mysql-db mysql -uroot -proot123 -N -e "USE backupdb; SELECT COUNT(*) FROM students;")          echo "Initial records: $COUNT"          test "$COUNT" -eq 3
