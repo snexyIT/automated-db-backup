@@ -1,36 +1,14 @@
 name: Automated Database Backup
-on:  workflow_dispatch:  schedule:    - cron: '0 0 * * *'
+on:  workflow_dispatch:  schedule:    - cron: "0 0 * * *"
 jobs:  backup:    runs-on: ubuntu-latest
     steps:      - name: Checkout Repository        uses: actions/checkout@v4
-      - name: Reset MySQL Test Environment        run: |          docker compose down -v --remove-orphans          docker compose up -d mysql
-      - name: Wait for MySQL Authentication        run: |          echo "Waiting for MySQL..."
-          for i in {1..60}; do            if docker exec mysql-db mysql -uroot -proot123 -e "SELECT 1;" >/dev/null 2>&1; then              echo "MySQL authentication is ready."              exit 0            fi
-            echo "Waiting for MySQL... attempt $i/60"            sleep 2          done
-          echo "MySQL failed to become ready."          docker logs mysql-db          exit 1
-      - name: Prepare Test Database        run: |          docker exec mysql-db mysql -uroot -proot123 backupdb -e "            CREATE TABLE IF NOT EXISTS students (              id INT PRIMARY KEY,              name VARCHAR(100) NOT NULL,              department VARCHAR(100) NOT NULL            );
-            TRUNCATE TABLE students;
-            INSERT INTO students (id, name, department) VALUES            (1, 'Olaniyan Mariah', 'Computer Science'),            (2, 'Esther Olakunle', 'Information Technology'),            (3, 'Fresky Thompson', 'Software Engineering');          "
-          echo "Test database prepared successfully."
-      - name: Verify Initial Data        run: |          COUNT=$(docker exec mysql-db mysql -uroot -proot123 -N -e "USE backupdb; SELECT COUNT(*) FROM students;")
-          echo "Initial student count: $COUNT"
-          if [ "$COUNT" -eq 3 ]; then            echo "Initial data verification successful: 3 records found."          else            echo "Initial data verification failed: expected 3 records, found $COUNT."            exit 1          fi
-      - name: Create Backup Folder        run: |          mkdir -p backups/generated
-      - name: Create Database Backup        run: |          docker exec mysql-db mysqldump \            -uroot \            -proot123 \            --single-transaction \            --routines \            --triggers \            --hex-blob \            backupdb > backups/generated/backup.sql
-          echo "Database backup created successfully."          ls -lh backups/generated/backup.sql
-      - name: Verify Backup File        run: |          if [ ! -s backups/generated/backup.sql ]; then            echo "Backup verification failed: backup file is empty."            exit 1          fi
-          echo "Backup file exists and is not empty."
-          grep -q "Olaniyan Mariah" backups/generated/backup.sql          grep -q "Esther Olakunle" backups/generated/backup.sql          grep -q "Fresky Thompson" backups/generated/backup.sql
-          echo "All expected student records are present in the backup."
-      - name: Upload Backup Artifact        uses: actions/upload-artifact@v4        with:          name: database-backup          path: backups/generated/backup.sql
-      - name: Clear Database        run: |          echo "Clearing students table..."
-          docker exec mysql-db mysql -uroot -proot123 -e "USE backupdb; TRUNCATE TABLE students;"
-          COUNT=$(docker exec mysql-db mysql -uroot -proot123 -N -e "USE backupdb; SELECT COUNT(*) FROM students;")
-          echo "Records after clearing: $COUNT"
-          if [ "$COUNT" -eq 0 ]; then            echo "Database successfully cleared."          else            echo "Database clearing failed."            exit 1          fi
-      - name: Restore Database        run: |          echo "Restoring database from backup..."
-          docker exec -i mysql-db mysql \            --binary-mode=1 \            -uroot \            -proot123 \            backupdb < backups/generated/backup.sql
-          echo "Database restore completed successfully."
-      - name: Verify Restored Data        run: |          COUNT=$(docker exec mysql-db mysql -uroot -proot123 -N -e "USE backupdb; SELECT COUNT(*) FROM students;")
-          echo "Restored student count: $COUNT"
-          if [ "$COUNT" -eq 3 ]; then            echo "========================================"            echo "RESTORE VERIFICATION SUCCESSFUL"            echo "3 records successfully recovered."            echo "========================================"          else            echo "Restore verification failed: expected 3 records, found $COUNT."            exit 1          fi
-      - name: Stop MySQL        if: always()        run: |          docker compose down -v
+      - name: Start MySQL        run: docker compose up -d mysql
+      - name: Wait for MySQL        run: |          for i in {1..60}; do            if docker exec mysql-db mysql -uroot -proot123 -e "SELECT 1" >/dev/null 2>&1; then              echo "MySQL is ready."              break            fi            sleep 2          done
+      - name: Prepare Database        run: |          docker exec mysql-db mysql -uroot -proot123 backupdb -e "CREATE TABLE IF NOT EXISTS students (id INT PRIMARY KEY, name VARCHAR(100), department VARCHAR(100)); TRUNCATE TABLE students; INSERT INTO students VALUES (1,'Olaniyan Mariah','Computer Science'),(2,'Esther Olakunle','Information Technology'),(3,'Fresky Thompson','Software Engineering');"
+      - name: Verify Initial Data        run: |          COUNT=$(docker exec mysql-db mysql -uroot -proot123 -N -e "USE backupdb; SELECT COUNT(*) FROM students;")          echo "Initial records: $COUNT"          test "$COUNT" -eq 3
+      - name: Create Backup        run: |          mkdir -p backups/generated          docker exec mysql-db mysqldump -uroot -proot123 backupdb > backups/generated/backup.sql          test -s backups/generated/backup.sql          echo "Backup created successfully."
+      - name: Upload Backup        uses: actions/upload-artifact@v4        with:          name: database-backup          path: backups/generated/backup.sql
+      - name: Clear Database        run: |          docker exec mysql-db mysql -uroot -proot123 -e "USE backupdb; TRUNCATE TABLE students;"          COUNT=$(docker exec mysql-db mysql -uroot -proot123 -N -e "USE backupdb; SELECT COUNT(*) FROM students;")          echo "Records after clearing: $COUNT"          test "$COUNT" -eq 0
+      - name: Restore Database        run: |          docker exec -i mysql-db mysql -uroot -proot123 backupdb < backups/generated/backup.sql          echo "Database restored successfully."
+      - name: Verify Restore        run: |          COUNT=$(docker exec mysql-db mysql -uroot -proot123 -N -e "USE backupdb; SELECT COUNT(*) FROM students;")          echo "Restored records: $COUNT"          if [ "$COUNT" -eq 3 ]; then            echo "RESTORE VERIFICATION SUCCESSFUL"            echo "3 records successfully recovered."          else            echo "RESTORE VERIFICATION FAILED"            exit 1          fi
+      - name: Stop MySQL        if: always()        run: docker compose down -v
