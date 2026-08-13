@@ -1,5 +1,5 @@
 name: Automated Database Backup
-"on":  workflow_dispatch:  schedule:    - cron: "0 0 * * *"
+on:  workflow_dispatch:  schedule:    - cron: "0 0 * * *"
 jobs:  backup:    runs-on: ubuntu-latest
     steps:      - name: Checkout Repository        uses: actions/checkout@v4
       - name: Start MySQL        run: docker compose up -d mysql
