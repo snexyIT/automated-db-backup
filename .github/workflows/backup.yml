@@ -42,7 +42,7 @@ jobs:
         run: |
           echo "Loading existing database backup..."
 
-          docker exec -i mysql-db mysql -uroot -proot123 backupdb < backups/backup.sql
+          docker exec -i mysql-db mysql --binary-mode=1 -uroot -proot123 backupdb < backups/backup.sql
 
           echo "Existing database backup loaded successfully."
 
@@ -100,7 +100,9 @@ jobs:
 
           echo "Restoring database from generated backup..."
 
-          docker exec -i mysql-db mysql -uroot -proot123 backupdb < backups/generated/backup.sql
+          docker exec -i mysql-db mysql --binary-mode=1 -uroot -proot123 backupdb < backups/generated/backup.sql
+
+          echo "Verifying restored data..."
 
           COUNT=$(docker exec mysql-db mysql -uroot -proot123 -N -e "USE backupdb; SELECT COUNT(*) FROM students;")
 
